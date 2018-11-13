@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+# vim: se fileencoding=utf-8 :
+# Script to read kernel version out of kernel image.
+# (c) 2018 Michał Górny
+# Released under the terms of the 2-clause BSD license
+
+from __future__ import print_function
+
+import argparse
+import struct
+import sys
+
+
+def read_version(f):
+	"""
+	Read kernel version from the open file @f.  Returns the version
+	string (bytes) or None if kernel file wasn't recognized as any known
+	format.
+	"""
+
+	# variant A: bzImage
+	# logic based on file(1) magic rules
+	f.seek(0x200)
+	buf = f.read(0x10)
+	if buf[2:6] == b'HdrS':
+		offset = struct.unpack_from('H', buf, 0x0e)[0]
+		f.seek(offset - 0x10, 1)
+		buf = b''
+		while b' ' not in buf:
+			buf += f.read(0x100)
+		return buf.split(b' ', 1)[0]
+
+	return None
+
+
+def main(argv):
+	argp = argparse.ArgumentParser(prog=argv[0],
+			description='Read kernel version from kernel image')
+	argp.add_argument('kernel_image', type=argparse.FileType('rb'),
+			help='Kernel image to read version from')
+	args = argp.parse_args(argv[1:])
+
+	kv = read_version(args.kernel_image)
+	if kv is None:
+		print('Kernel image not recognized as any supported format',
+			  file=sys.stderr)
+		return 1
+	print(kv.decode())
+
+	return 0
+
+
+if __name__ == '__main__':
+	sys.exit(main(sys.argv))
